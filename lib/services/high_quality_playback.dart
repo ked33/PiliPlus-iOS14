@@ -13,6 +13,7 @@ abstract final class HighQualityPlayback {
   static const enabledKey = 'enableHighQualityPlayback';
   static const serverKey = 'highQualityPlaybackServer';
   static const accountKey = 'highQualityPlaybackAccount';
+  static const qualityKey = 'highQualityPlaybackQuality';
   static const defaultServer = 'http://mxd.indevs.in';
   static const _userAgent =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
@@ -22,6 +23,10 @@ abstract final class HighQualityPlayback {
   static bool get enabled => GStorage.setting.get(enabledKey, defaultValue: false);
   static String get server => GStorage.setting.get(serverKey, defaultValue: defaultServer);
   static int get accountId => GStorage.setting.get(accountKey, defaultValue: 0);
+  static int get targetQuality {
+    final value = GStorage.setting.get(qualityKey, defaultValue: 120);
+    return HighQualityClient.qualities.contains(value) ? value as int : 120;
+  }
   static final status = ValueNotifier<String>('尚未请求高画质服务');
 
   static HighQualityClient? _client;
@@ -75,6 +80,14 @@ abstract final class HighQualityPlayback {
     final generation = _generation;
     final selected = account!;
     try {
+      final requested = parameters['qn'] as int? ?? 129;
+      final target = requested < targetQuality ? requested : targetQuality;
+      final originalStream = HighQualityClient.playableData(original);
+      if (original['code'] == 0 && originalStream != null &&
+          HighQualityClient.highestQuality(originalStream) >= target) {
+        status.value = '原接口画质已满足目标，已跳过高画质服务';
+        return null;
+      }
       final cookies = await selected.cookieJar.loadForRequest(Uri.parse('https://api.bilibili.com/'));
       final picked = {for (final cookie in cookies) if (cookieNames.contains(cookie.name)) cookie.name: cookie.value};
       if ((picked['SESSDATA'] ?? '').isEmpty || picked['DedeUserID'] != '${selected.mid}') {
@@ -132,10 +145,10 @@ abstract final class HighQualityPlayback {
         for (final name in ['avid', 'bvid', 'cid', 'qn', 'ep_id', 'season_id', 'fnval', 'fnver', 'fourk', 'voice_balance', 'cur_language'])
           if (parameters[name] != null) name: '${parameters[name]}',
       };
+      clean['qn'] = '$target';
       final uri = Uri.https('api.bilibili.com', type == VideoType.pgc ? type.api : '/x/player/playurl', clean);
       final result = await _client!.resolve(identity: _identity!, playUrl: uri, pgc: type == VideoType.pgc, original: original);
       if (generation != _generation || _identityKey != key || !enabled || selectedAccount != selected) return null;
-      if (result == null) _retryAt = DateTime.now().add(const Duration(seconds: 30));
       return result;
     } catch (_) {
       if (generation == _generation) status.value = '高画质请求失败，已使用原播放接口';

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:dio/dio.dart';
 
 /// Protocol shared with the user's 0.0.6 quality-enhancement userscript.
@@ -108,6 +109,13 @@ class HighQualityClient {
     if (_closed) return null;
     final timer = Stopwatch()..start();
     try {
+      final oldData = original == null ? null : playableData(original);
+      final requestedQuality = int.tryParse(playUrl.queryParameters['qn'] ?? '');
+      if (oldData != null && requestedQuality != null &&
+          highestQuality(oldData) >= requestedQuality) {
+        _status('原接口画质已满足目标，已跳过高画质服务');
+        return null;
+      }
       if (!await _initialize(identity) || _closed) return null;
       _status('正在请求高画质视频流');
       final response = await _post(pgc ? '/api/bzview3' : '/api/bzview2', {
@@ -128,12 +136,12 @@ class HighQualityClient {
         _status('服务未返回可播放的高画质流，已使用原播放接口');
         return null;
       }
-      final oldData = original == null ? null : playableData(original);
       if (oldData != null && highestQuality(result) <= highestQuality(oldData)) {
         _status('原接口画质已满足要求，继续使用原视频流');
         return null;
       }
-      _status('高画质请求成功 · 画质 ${highestQuality(result)} · ${timer.elapsedMilliseconds} ms');
+      final quality = VideoQuality.fromCode(highestQuality(result)).desc;
+      _status('高画质请求成功 · $quality · ${timer.elapsedMilliseconds} ms');
       return result;
     } on DioException catch (error) {
       if (!CancelToken.isCancel(error)) {

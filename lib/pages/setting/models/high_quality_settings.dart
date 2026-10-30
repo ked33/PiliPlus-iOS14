@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
+import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
 import 'package:PiliPlus/services/high_quality_client.dart';
 import 'package:PiliPlus/services/high_quality_playback.dart';
@@ -53,6 +54,29 @@ List<SettingsModel> get highQualitySettings => [
       if (value == null || !context.mounted) return;
       if (HighQualityPlayback.enabled && !await _confirm(context, value)) return;
       await GStorage.setting.put(HighQualityPlayback.serverKey, value);
+      HighQualityPlayback.reset();
+      refresh();
+    },
+  ),
+  NormalModel(
+    title: '高画质目标画质',
+    getSubtitle: () => VideoQuality.fromCode(HighQualityPlayback.targetQuality).desc,
+    leading: const Icon(Icons.video_settings_outlined),
+    onTap: (context, refresh) async {
+      final quality = await showDialog<int>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('高画质目标画质'),
+          children: [for (final quality in VideoQuality.values.where((q) => q.code >= 80))
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, quality.code),
+              child: Text(quality.desc),
+            ),
+          ],
+        ),
+      );
+      if (quality == null) return;
+      await GStorage.setting.put(HighQualityPlayback.qualityKey, quality);
       HighQualityPlayback.reset();
       refresh();
     },

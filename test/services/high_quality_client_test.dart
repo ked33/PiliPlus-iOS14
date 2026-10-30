@@ -105,6 +105,14 @@ void main() {
     client.close();
   });
 
+  test('sufficient original quality skips all third-party requests', () async {
+    final adapter = FakeAdapter([]);
+    final client = HighQualityClient(server: Uri.parse('https://service.example.test'), dio: Dio()..httpClientAdapter = adapter);
+    expect(await client.resolve(identity: identity, playUrl: Uri.parse('https://api.bilibili.com/x/player/playurl?qn=120'), pgc: false, original: playback(120)), isNull);
+    expect(adapter.requests, isEmpty);
+    client.close();
+  });
+
   test('PGC uses bzview3 and normalizes a video_info response', () async {
     final data = playback(120)['data'];
     final adapter = FakeAdapter([
