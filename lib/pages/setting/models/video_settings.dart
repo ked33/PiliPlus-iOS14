@@ -6,6 +6,7 @@ import 'package:PiliPlus/models/common/video/live_quality.dart';
 import 'package:PiliPlus/models/common/video/video_decode_type.dart';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
+import 'package:PiliPlus/pages/setting/models/high_quality_settings.dart';
 import 'package:PiliPlus/pages/setting/widgets/ordered_multi_select_dialog.dart';
 import 'package:PiliPlus/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPlus/plugin/pl_player/models/audio_output_type.dart';
@@ -23,6 +24,7 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 
 List<SettingsModel> get videoSettings => [
+  ...highQualitySettings,
   const SwitchModel(
     title: '开启硬解',
     subtitle: '以较低功耗播放视频，若异常卡死请关闭',

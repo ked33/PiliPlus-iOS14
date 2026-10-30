@@ -1,3 +1,8 @@
+> 本仓库基于官方 **PiliPlus 2.1.6+5472**，用于 iPadOS 14.7 兼容构建。
+> Actions 仅提供 IPA 构建；兼容引擎是构建前置步骤。
+> 高画质播放入口位于 **设置 → 视频设置**，默认关闭。启用后会向配置的第三方服务发送所选账号的登录凭证。
+> 适配说明、云构建状态及真机验证边界见 [iOS 14 构建说明](tool/ios14/README.md)。
+
 <div align="center">
     <img width="200" height="200" src="assets/images/logo/logo.png">
 </div>

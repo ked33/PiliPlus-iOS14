@@ -12,7 +12,7 @@ import subprocess
 FLUTTER_REVISION = "abaf9c523780a608bd46686fd5e53740a07077f8"
 
 
-def patch(root: Path) -> None:
+def patch(root: Path, tools_only: bool = False) -> None:
     revision = subprocess.check_output(
         ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
     ).strip()
@@ -92,6 +92,8 @@ def patch(root: Path) -> None:
     # Validate every edit before writing anything; fail if upstream source drifts.
     pending = {}
     for name, replacements in edits.items():
+        if tools_only and not name.startswith("packages/flutter_tools/"):
+            continue
         path = root / name
         original = path.read_bytes()
         content = original
@@ -107,10 +109,16 @@ def patch(root: Path) -> None:
     for path, content in pending.items():
         path.write_bytes(content)
         print(path.relative_to(root))
+    if any("packages/flutter_tools/" in str(path.as_posix()) for path in pending):
+        # Flutter's downloaded CLI snapshot otherwise still enforces iOS 15.
+        for name in ("flutter_tools.snapshot", "flutter_tools.stamp"):
+            (root / "bin/cache" / name).unlink(missing_ok=True)
     print(f"iOS 14 source patch ready; updated {len(pending)} files")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("flutter_root", type=Path)
-    patch(parser.parse_args().flutter_root.resolve())
+    parser.add_argument("--tools-only", action="store_true")
+    args = parser.parse_args()
+    patch(args.flutter_root.resolve(), args.tools_only)

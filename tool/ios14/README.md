@@ -9,7 +9,7 @@
 
 ## 云构建
 
-先运行 **Build Flutter engine for iOS 14**。它使用 Xcode 26.2 编译 iOS release 引擎及匹配的 macOS 主机工具，产出可复用的引擎 artifact。
+运行唯一的 **Build IPA for iPadOS 14.7** 工作流。它先使用 Xcode 26.2 编译 iOS release 引擎及匹配的 macOS 主机工具，再构建应用。引擎会缓存复用；最终安装包位于 `PiliPlus-iOS14-IPA` artifact。
 引擎编译由 GitHub Actions 完成，Windows 无法执行此步骤。
 
 当前适配需通过云端编译和 iPadOS 14.7 真机验证；最低系统版本检查并不等于运行时兼容性证明。
@@ -20,3 +20,14 @@
 - https://github.com/bggRGjQaUbCoE/PiliPlus/issues/2618
 
 项目沿用上游 GPL-3.0 许可证。原作者和完整许可证见仓库根目录。
+
+## 高画质播放
+
+入口：设置 → 视频设置。提供「高画质播放（实验性）」「高画质服务地址」「高画质请求状态」「高画质所用账号」。
+
+接口协议按用户提供的 MIT userscript 0.0.6 实现：`/api/bzusta` 校验账号与配额，`/api/bzview2` 解析普通视频，`/api/bzview3` 对接番剧。
+默认地址为脚本使用的服务地址，可以更改。请求超时、配额不足、服务协议变化、响应无法解析或没有更高画质时，保留原播放结果。原账号登录态和会员展示不作伪装。
+
+该功能默认关闭。启用时会说明账号凭证外发和 HTTP 明文传输；只发送 SESSDATA、bili_jct、DedeUserID、buvid3 四项 Cookie。第三方请求禁用重定向、独立于官方账号拦截器，状态只保留固定消息和画质/耗时，不保存原始响应或登录凭证。客户端不会自动打开服务端返回的跳转链接。
+
+协议测试使用模拟服务，未用用户真实 Cookie 请求第三方服务。PGC 与服务端的实际兼容性仍需真机验证；失败时回退。

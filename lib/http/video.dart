@@ -7,6 +7,7 @@ import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/init.dart';
+import 'package:PiliPlus/services/high_quality_playback.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/login.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
@@ -253,6 +254,26 @@ abstract final class VideoHttp {
 
     try {
       final res = await Request().get(videoType.api, queryParameters: params);
+      final original = Map<String, dynamic>.from(res.data as Map);
+      final enhanced = await HighQualityPlayback.enhance(
+        original: original,
+        parameters: params,
+        type: videoType,
+      );
+      if (enhanced != null) {
+        try {
+          final data = PlayUrlModel.fromJson(enhanced);
+          if (videoType == VideoType.ugc) {
+            data.lastPlayTime = original['data']?['last_play_time'];
+            data.lastPlayCid = original['data']?['last_play_cid'];
+          } else {
+            data.lastPlayTime = original['result']?['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
+          }
+          return Success(data);
+        } catch (_) {
+          HighQualityPlayback.status.value = '高画质视频流格式无效，已使用原播放接口';
+        }
+      }
 
       if (res.data['code'] == 0) {
         late PlayUrlModel data;

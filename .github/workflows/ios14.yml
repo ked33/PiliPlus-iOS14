@@ -1,0 +1,177 @@
+name: Build IPA for iPadOS 14.7
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: piliplus-ios14-ipa
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Apply application Flutter patches
+        shell: pwsh
+        run: lib/scripts/patch.ps1 iOS
+      - name: Analyze changed Dart code
+        run: flutter analyze --no-pub --no-fatal-infos lib/services/high_quality_client.dart lib/services/high_quality_playback.dart lib/pages/setting/models/high_quality_settings.dart lib/http/video.dart
+      - name: Test protocol and IPA verification
+        run: |
+          flutter test --no-pub test/services/high_quality_client_test.dart
+          python3 -m unittest discover -s test/tool -v
+
+  engine:
+    runs-on: macos-26
+    timeout-minutes: 350
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
+      DEPOT_TOOLS_UPDATE: '0'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Restore compatible engine cache
+        id: engine-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/engine-ios14.tar.gz
+          key: ios14-flutter-3.47.7-xcode26.2-${{ hashFiles('tool/ios14/patch_flutter.py', 'tool/ios14/package_engine.py') }}
+
+      - name: Check Xcode and available space
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: |
+          xcodebuild -version
+          df -h .
+          xcodebuild -downloadComponent MetalToolchain
+
+      - name: Download Flutter source and depot tools
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch 3.47.7 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          test "$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)" = "$FLUTTER_REVISION"
+          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$RUNNER_TEMP/depot_tools"
+          echo "$RUNNER_TEMP/depot_tools" >> "$GITHUB_PATH"
+          python3 - <<'PY'
+          import os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'flutter'
+          settings = {
+              'name': '.', 'url': 'https://github.com/flutter/flutter.git',
+              'managed': False, 'deps_file': 'DEPS', 'custom_deps': {},
+              'custom_vars': {
+                  'download_android_deps': False, 'download_jdk': False,
+                  'download_fuchsia_deps': False, 'download_linux_deps': False,
+                  'download_windows_deps': False, 'download_emsdk': False,
+                  'setup_githooks': False,
+              },
+          }
+          (root / '.gclient').write_text('solutions = ' + repr([settings]) + '\n')
+          PY
+
+      - name: Fetch engine dependencies
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}/flutter
+        run: gclient sync --no-history --shallow --jobs 4
+
+      - name: Restore iOS 14 support in source
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: python3 tool/ios14/patch_flutter.py "$RUNNER_TEMP/flutter"
+
+      - name: Build release engine and matching host tools
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}/flutter/engine/src
+        run: |
+          ./flutter/tools/gn --ios --runtime-mode=release --no-lto --no-enable-unittests --no-build-embedder-examples
+          ninja -C out/ios_release -j 3
+          ./flutter/tools/gn --runtime-mode=release --mac-cpu=arm64 --no-lto --no-enable-unittests --no-build-embedder-examples
+          ninja -C out/host_release_arm64 -j 3
+
+      - name: Package reusable engine artifacts
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: python3 tool/ios14/package_engine.py "$RUNNER_TEMP/flutter" "$RUNNER_TEMP/engine-ios14.tar.gz"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flutter-3.47.7-ios14-release
+          path: ${{ runner.temp }}/engine-ios14.tar.gz
+          compression-level: 0
+          retention-days: 30
+
+  ipa:
+    needs: [engine, validate]
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      FLUTTER_PREBUILT_ENGINE_VERSION: deb287481e3ce9468f3434937ced4240a70539ca
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: flutter-3.47.7-ios14-release
+          path: ${{ runner.temp }}/engine-artifact
+
+      - name: Prepare compatible SDK and matching local engine
+        run: |
+          python3 tool/ios14/patch_flutter.py "$FLUTTER_ROOT" --tools-only
+          mkdir -p "$RUNNER_TEMP/local-engine/out"
+          tar -xzf "$RUNNER_TEMP/engine-artifact/engine-ios14.tar.gz" -C "$RUNNER_TEMP/local-engine/out"
+          flutter config --no-enable-swift-package-manager
+          python3 tool/ios14/prepare_app.py
+
+      - name: Apply application Flutter patches
+        shell: pwsh
+        run: lib/scripts/patch.ps1 iOS
+
+      - name: Analyze high quality integration
+        run: flutter analyze --no-pub --no-fatal-infos lib/services/high_quality_client.dart lib/services/high_quality_playback.dart lib/pages/setting/models/high_quality_settings.dart lib/http/video.dart
+
+      - name: Verify high quality protocol and fallback
+        run: flutter test --no-pub test/services/high_quality_client_test.dart
+
+      - name: Build release IPA with the compatible engine
+        run: |
+          flutter build ios --release --no-codesign --no-pub             --local-engine-src-path="$RUNNER_TEMP/local-engine"             --local-engine=ios_release --local-engine-host=host_release_arm64             --dart-define-from-file=pili_release.json
+          mkdir Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          find Payload/Runner.app/Frameworks -type d -name '*.framework' -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;
+          zip -qr PiliPlus_ios14_2.1.6+5472.ipa Payload/Runner.app
+          python3 tool/ios14/verify_ipa.py PiliPlus_ios14_2.1.6+5472.ipa --report ios14-verification.json
+
+      - name: Upload verified IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: PiliPlus-iOS14-IPA
+          archive: false
+          path: PiliPlus_ios14_2.1.6+5472.ipa
+          if-no-files-found: error
+
+      - name: Upload binary verification report
+        uses: actions/upload-artifact@v7
+        with:
+          name: iOS14-verification
+          path: ios14-verification.json
