@@ -1,2 +1,6 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// Keep CoreMedia timebase imports compatible with iOS 14 in modern SDKs.
+GCC_PREPROCESSOR_DEFINITIONS = $(inherited) CMTIMEBASE_USE_SOURCE_TERMINOLOGY=0
+OTHER_SWIFT_FLAGS = $(inherited) -Xcc -DCMTIMEBASE_USE_SOURCE_TERMINOLOGY=0

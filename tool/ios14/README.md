@@ -14,6 +14,13 @@
 
 当前适配需通过云端编译和 iPadOS 14.7 真机验证；最低系统版本检查并不等于运行时兼容性证明。
 
+### iPadOS 14.7.1 启动时 CoreMedia 符号缺失
+
+曾出现 `DYLD, symbol '_CMTimebaseCreateWithSourceClock' not found`，在运行应用代码前就被系统终止。
+`Runner` 的最低版本为 14.0 仍可能有此问题：现代 CoreMedia SDK 把这个重命名接口标注为 iOS 6，但旧系统实际导出的是 `CMTimebaseCreateWithMasterClock`。
+Debug / Release 的 xcconfig 对 C 和 Swift 的 Clang importer 显式设置 `CMTIMEBASE_USE_SOURCE_TERMINOLOGY=0`，让 SDK 使用旧系统兼容分支；无需重编 Flutter 引擎。
+`verify_ipa.py` 检查 Mach-O 未定义符号表，拒绝对已知缺失符号的强引用，并把 CoreMedia timebase 导入写入报告。这是针对已知崩溃的回归检查，不是完整的系统 API 兼容性扫描。
+
 上游参考：
 - https://github.com/flutter/flutter/pull/188187
 - https://github.com/flutter/flutter/pull/188189
