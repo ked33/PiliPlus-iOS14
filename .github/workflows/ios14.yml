@@ -23,6 +23,13 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: true
+          # The application script patches packages in the pub cache in place.
+          pub-cache: false
+      - name: Reset cached SDK before applying patches
+        run: |
+          test "$(git -C "$FLUTTER_ROOT" rev-parse HEAD)" = abaf9c523780a608bd46686fd5e53740a07077f8
+          git -C "$FLUTTER_ROOT" restore --source=HEAD --staged --worktree -- .
+          rm -f "$FLUTTER_ROOT/bin/cache/flutter_tools.snapshot" "$FLUTTER_ROOT/bin/cache/flutter_tools.stamp"
       - name: Apply application Flutter patches
         shell: pwsh
         run: lib/scripts/patch.ps1 iOS
@@ -136,6 +143,13 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: true
+          pub-cache: false
+
+      - name: Reset cached SDK before applying patches
+        run: |
+          test "$(git -C "$FLUTTER_ROOT" rev-parse HEAD)" = abaf9c523780a608bd46686fd5e53740a07077f8
+          git -C "$FLUTTER_ROOT" restore --source=HEAD --staged --worktree -- .
+          rm -f "$FLUTTER_ROOT/bin/cache/flutter_tools.snapshot" "$FLUTTER_ROOT/bin/cache/flutter_tools.stamp"
 
       - uses: actions/download-artifact@v7
         with:
