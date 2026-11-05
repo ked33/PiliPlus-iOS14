@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:PiliPlus/models/common/video/video_quality.dart';
 import 'package:dio/dio.dart';
 
-/// Protocol shared with the user's 0.0.6 quality-enhancement userscript.
+/// Playback endpoints shared with the user's quality-enhancement userscript.
 /// Uses a dedicated client: account interceptors, redirects and logging from
 /// the main Bilibili client must never be attached to this connection.
 class HighQualityClient {
@@ -77,11 +77,8 @@ class HighQualityClient {
         _status('账号验证失败，已使用原播放接口');
         return false;
       }
-      final version = response?['version'];
-      if (version != null && version.toString() != '0.0.6') {
-        _status('高画质服务协议已更新，已使用原播放接口');
-        return false;
-      }
+      // version/homepage describe the service's userscript update, not the
+      // playback protocol. Ignore them and validate the actual stream below.
       final quota = response?['coin'];
       if (quota == false || quota == 0 || quota == '0') {
         _status('高画质服务配额不足，已使用原播放接口');
